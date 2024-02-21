@@ -1,4 +1,3 @@
-
 //! A Proxy Connector crate for Hyper based applications
 //!
 //! # Example
@@ -62,7 +61,7 @@ use http::header::{HeaderMap, HeaderName, HeaderValue};
 use hyper::{service::Service, Uri};
 
 use futures_util::future::TryFutureExt;
-use std::{convert::TryFrom, fmt, io, sync::Arc};
+use std::{fmt, io, sync::Arc};
 use std::{
     future::Future,
     pin::Pin,
@@ -293,28 +292,37 @@ impl<C> ProxyConnector<C> {
 
         #[cfg(feature = "rustls")]
         {
-            let certs = rustls_native_certs::load_native_certs()?.into_iter().map(|der| {
-                let anchor = webpki::TrustAnchor::try_from_cert_der(&der.0).map_err(io_err)?;
+            let certs = rustls_native_certs::load_native_certs()?
+                .into_iter()
+                .map(|der| {
+                    let anchor = webpki::TrustAnchor::try_from_cert_der(&der.0).map_err(io_err)?;
 
-                Ok(tokio_rustls::rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                    anchor.subject,
-                    anchor.spki,
-                    anchor.name_constraints,
-                ))
-            }).collect::<Result<Vec<_>, io::Error>>()?;
+                    Ok(
+                        tokio_rustls::rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                            anchor.subject,
+                            anchor.spki,
+                            anchor.name_constraints,
+                        ),
+                    )
+                })
+                .collect::<Result<Vec<_>, io::Error>>()?;
 
             roots.add_server_trust_anchors(certs.into_iter());
         }
 
         #[cfg(feature = "rustls-webpki")]
         {
-            let certs = webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|anchor| {
-                tokio_rustls::rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                    anchor.subject,
-                    anchor.spki,
-                    anchor.name_constraints,
-                )
-            }).collect::<Vec<_>>();
+            let certs = webpki_roots::TLS_SERVER_ROOTS
+                .0
+                .iter()
+                .map(|anchor| {
+                    tokio_rustls::rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                        anchor.subject,
+                        anchor.spki,
+                        anchor.name_constraints,
+                    )
+                })
+                .collect::<Vec<_>>();
 
             roots.add_server_trust_anchors(certs.into_iter());
         }
@@ -463,7 +471,13 @@ where
         if let (Some(p), Some(host)) = (self.match_proxy(&uri), uri.host()) {
             if uri.scheme() == Some(&http::uri::Scheme::HTTPS) || p.force_connect {
                 let host = host.to_owned();
-                let port = uri.port_u16().unwrap_or(if uri.scheme() == Some(&http::uri::Scheme::HTTP) { 80 } else { 443 });
+                let port =
+                    uri.port_u16()
+                        .unwrap_or(if uri.scheme() == Some(&http::uri::Scheme::HTTP) {
+                            80
+                        } else {
+                            443
+                        });
                 let tunnel = tunnel::new(&host, port, &p.headers);
                 let connection =
                     proxy_dst(&uri, &p.uri).map(|proxy_url| self.connector.call(proxy_url));
@@ -491,8 +505,7 @@ where
 
                             #[cfg(feature = "rustls-base")]
                             Some(tls) => {
-                                let dnsref =
-                                    mtry!(ServerName::try_from(&*host).map_err(io_err));
+                                let dnsref = mtry!(ServerName::try_from(&*host).map_err(io_err));
                                 let tls = TlsConnector::from(tls);
                                 let secure_stream =
                                     mtry!(tls.connect(dnsref, tunnel_stream).await.map_err(io_err));
