@@ -62,11 +62,7 @@ use hyper::{service::Service, Uri};
 
 use futures_util::future::TryFutureExt;
 use std::{fmt, io, sync::Arc};
-use std::{
-    future::Future,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::{future::Future, pin::Pin};
 
 pub use stream::ProxyStream;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -459,15 +455,7 @@ where
     type Error = io::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        match self.connector.poll_ready(cx) {
-            Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-            Poll::Ready(Err(e)) => Poll::Ready(Err(io_err(e.into()))),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-
-    fn call(&mut self, uri: Uri) -> Self::Future {
+    fn call(&self, uri: Uri) -> Self::Future {
         if let (Some(p), Some(host)) = (self.match_proxy(&uri), uri.host()) {
             if uri.scheme() == Some(&http::uri::Scheme::HTTPS) || p.force_connect {
                 let host = host.to_owned();
